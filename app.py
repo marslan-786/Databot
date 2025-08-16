@@ -371,7 +371,7 @@ async def handle_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
             member = await bot.get_chat_member(chat_id=channel["id"], user_id=user_id)
             if member.status in ['left', 'kicked']:
                 failed.append(channel["name"])
-        except Exception as e:
+        except Exception:
             failed.append(channel["name"])
 
     if failed:
@@ -399,64 +399,76 @@ async def handle_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # --- image API سے data لو ---
             cnic_from_image = None
             async with session.get(image_api) as resp_img:
+                raw_img = await resp_img.text()
                 if resp_img.status == 200:
-                    image_data = await resp_img.json()
-                    cnic_from_image = image_data.get("CNIC", None)
-                    await generate_image(image_data)
-                    await update.message.reply_photo(
-                        photo=open("sim_info.png", "rb"),
-                        caption="🔍 SIM Data Retrieved (Image)"
-                    )
+                    try:
+                        image_data = json.loads(raw_img)
+                        cnic_from_image = image_data.get("CNIC", None)
+                        await generate_image(image_data)
+                        await update.message.reply_photo(
+                            photo=open("sim_info.png", "rb"),
+                            caption="🔍 SIM Data Retrieved (Image)"
+                        )
+                    except Exception:
+                        # JSON parse نہ ہوا → اصل response شو
+                        await update.message.reply_text(
+                            f"❌ Image API invalid response:\n\n{raw_img}"
+                        )
                 else:
-                    await update.message.reply_text("❌ Failed to fetch image data.")
+                    await update.message.reply_text(
+                        f"❌ Image API failed (status {resp_img.status}):\n\n{raw_img}"
+                    )
 
             # --- text API سے تمام ریکارڈز لو ---
             async with session.get(text_api) as resp_txt:
+                raw_txt = await resp_txt.text()
                 if resp_txt.status == 200:
-                    all_records = await resp_txt.json()
+                    try:
+                        all_records = json.loads(raw_txt)
 
-                    # CNIC override کریں اگر image API کا CNIC ملا ہو
-                    if cnic_from_image and isinstance(all_records, list):
-                        for record in all_records:
-                            record["CNIC"] = cnic_from_image
+                        # CNIC override کریں اگر image API کا CNIC ملا ہو
+                        if cnic_from_image and isinstance(all_records, list):
+                            for record in all_records:
+                                record["CNIC"] = cnic_from_image
 
-                    if isinstance(all_records, list) and len(all_records) > 0:
-                        text_blocks = []
-                        for record in all_records:
-                            name = record.get("Name", "Not Available")
-                            mobile = record.get("Mobile", "Not Available")
-                            cnic = record.get("CNIC", "Not Available")
-                            address = record.get("Address", "Not Available")
+                        if isinstance(all_records, list) and len(all_records) > 0:
+                            text_blocks = []
+                            for record in all_records:
+                                name = escape_markdown(record.get("Name", "Not Available"), version=2)
+                                mobile = escape_markdown(record.get("Mobile", "Not Available"), version=2)
+                                cnic = escape_markdown(record.get("CNIC", "Not Available"), version=2)
+                                address = escape_markdown(record.get("Address", "Not Available"), version=2)
 
-                            # ہر فیلڈ کو MarkdownV2 کے لیے escape کریں
-                            name = escape_markdown(name, version=2)
-                            mobile = escape_markdown(mobile, version=2)
-                            cnic = escape_markdown(cnic, version=2)
-                            address = escape_markdown(address, version=2)
+                                block = (
+                                    "━━━━━━━━━━━━━━━\n"
+                                    f"👤 *Name:* {name}\n"
+                                    f"📱 *Mobile:* {mobile}\n"
+                                    f"🆔 *CNIC:* {cnic}\n"
+                                    f"🏠 *Address:* {address}\n"
+                                    "━━━━━━━━━━━━━━━"
+                                )
+                                text_blocks.append(block)
 
-                            block = (
-                                "━━━━━━━━━━━━━━━\n"
-                                f"👤 *Name:* {name}\n"
-                                f"📱 *Mobile:* {mobile}\n"
-                                f"🆔 *CNIC:* {cnic}\n"
-                                f"🏠 *Address:* {address}\n"
-                                "━━━━━━━━━━━━━━━"
+                            final_text = "*𝙆𝘼𝙈𝙄 𝙭 𝙉𝙊𝙏𝙃𝙄𝙉𝙂 𝘿𝙖𝙩𝙖𝙗𝙖𝙨𝙚*\n\n" + "\n".join(text_blocks)
+                            await update.message.reply_text(
+                                final_text,
+                                parse_mode="MarkdownV2"
                             )
-                            text_blocks.append(block)
-
-                        final_text = "*𝙆𝘼𝙈𝙄 𝙭 𝙉𝙊𝙏𝙃𝙄𝙉𝙂 𝘿𝙖𝙩𝙖𝙗𝙖𝙨𝙚*\n\n" + "\n".join(text_blocks)
+                        else:
+                            await update.message.reply_text("No records found.")
+                    except Exception:
+                        # JSON parse نہ ہوا → اصل response شو
                         await update.message.reply_text(
-                            final_text,
-                            parse_mode="MarkdownV2"
+                            f"❌ Text API invalid response:\n\n{raw_txt}"
                         )
-                    else:
-                        await update.message.reply_text("No records found.")
                 else:
-                    await update.message.reply_text("❌ Failed to fetch text data.")
+                    await update.message.reply_text(
+                        f"❌ Text API failed (status {resp_txt.status}):\n\n{raw_txt}"
+                    )
 
     except Exception as e:
-        logging.error(f"API error: {e}")
-        await update.message.reply_text("⚠️ Error while connecting to APIs.")
+        logging.error(f"API error: {e}", exc_info=True)
+        await update.message.reply_text(f"⚠️ Error: {e}")
 
 
 # Run the bot
