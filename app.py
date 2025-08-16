@@ -69,9 +69,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🔎 Check Your SIM Detail", callback_data="check_sim")]
         ])
 
-        if os.path.exists("logo1.png"):
+        if os.path.exists("logo.png"):
             try:
-                with open("logo1.png", "rb") as img:
+                with open("logo.png", "rb") as img:
                     await update.message.reply_photo(
                         photo=img,
                         caption="🔍 SIM Detail Bot\n\nThis bot helps you retrieve SIM owner information using secure API.\n\nOnly for personal and research use.",
@@ -127,8 +127,8 @@ async def verify_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
 
         try:
-            if os.path.exists("logo1.png") and os.path.getsize("logo1.png") > 0:
-                with open("logo1.png", "rb") as img:
+            if os.path.exists("logo.png") and os.path.getsize("logo.png") > 0:
+                with open("logo.png", "rb") as img:
                     await bot.send_photo(
                         chat_id=query.message.chat_id,
                         photo=img,
@@ -136,7 +136,7 @@ async def verify_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         reply_markup=keyboard
                     )
             else:
-                raise FileNotFoundError("logo1.png not found or is empty.")
+                raise FileNotFoundError("logo.png not found or is empty.")
         except Exception as e:
             logging.error(f"📸 Photo send error: {e}")
             await bot.send_message(
@@ -161,7 +161,7 @@ async def generate_image(data: dict, file_path="sim_info.png"):
     import os
 
     width, base_height = 600, 500
-    bg_path = "logo3.png"
+    bg_path = "logo.png"
 
     def load_bg(height):
         if os.path.exists(bg_path):
