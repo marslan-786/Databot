@@ -391,8 +391,8 @@ async def handle_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
         phone = phone[1:]
 
     # --- APIs ---
-    image_api = f"https://data-api.impossible-world.xyz/api/data?phone={phone}"
-    text_api = f"https://data-api.impossible-world.xyz/api/alldata?number={phone}"
+    image_api = f"https://api.impossible-world.xyz/api/data?phone={phone}"
+    text_api = f"https://api.impossible-world.xyz/api/alldata?number={phone}"
 
     try:
         async with aiohttp.ClientSession() as session:
