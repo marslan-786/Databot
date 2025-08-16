@@ -156,10 +156,17 @@ async def check_sim(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text="📱 Please enter the phone number you want to check."
     )
 
-async def generate_image(data: dict, file_path="sim_info.png"):
-    from PIL import Image, ImageDraw, ImageFont
-    import os
+import requests
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+import asyncio
+import os
+from PIL import Image, ImageDraw, ImageFont
 
+# ==============================
+#  IMAGE GENERATE FUNCTION
+# ==============================
+async def generate_image(data: dict, file_path="sim_info.png"):
     width, base_height = 600, 500
     bg_path = "logo.png"
 
@@ -177,45 +184,25 @@ async def generate_image(data: dict, file_path="sim_info.png"):
         heights = [font.getbbox(line)[3] - font.getbbox(line)[1] for line in lines]
         return sum(heights) + padding * 2 + (len(lines) - 1) * 10
 
-    # حرفوں کی بنیاد پر address تقسیم کرنے والا فنکشن
     def split_address_custom(text):
-        # text میں "Address: " پہلے سے موجود ہے
         lines = []
-
-        # پہلی لائن کے لیے: "Address: " کے بعد 10 سے 12 حروف لیں (spaces سمیت)
         prefix = "Address: "
         prefix_len = len(prefix)
-
-        # پورا ٹیکسٹ (Address: + باقی)
         full_text = text
-
-        # پہلی لائن میں prefix شامل کریں، پھر prefix کے بعد 10 سے 12 حروف مزید شامل کریں
-        # ہم 12 تک لیں گے، مگر کم از کم 10 بھی ہونا چاہیے
-
-        # prefix کے بعد والے text کو extract کریں:
         after_prefix = full_text[prefix_len:]
-
-        # پہلی لائن میں prefix + 12 characters لیں، اگر متن کم ہو تو جتنا ہو لے لیں
         first_line_chars = min(max(10, 12), len(after_prefix))
         first_line_text = prefix + after_prefix[:first_line_chars]
         lines.append(first_line_text)
-
-        # باقی ٹیکسٹ دوسری لائن کے لیے
         remaining_text = after_prefix[first_line_chars:]
-
-        # دوسری لائن میں زیادہ سے زیادہ 25 حروف لیں
         second_line_chars = min(25, len(remaining_text))
         second_line_text = remaining_text[:second_line_chars]
-        lines.append(second_line_text)
-
-        # باقی تیسری لائن کے لیے
+        if second_line_text:
+            lines.append(second_line_text)
         third_line_text = remaining_text[second_line_chars:]
         if third_line_text:
-            # اگر تیسری لائن بہت لمبی ہو تو "..." لگائیں
             if len(third_line_text) > 50:
                 third_line_text = third_line_text[:47] + "..."
             lines.append(third_line_text)
-
         return lines
 
     header_height = 70
@@ -241,7 +228,6 @@ async def generate_image(data: dict, file_path="sim_info.png"):
     ]
 
     footer_height = brand_font.getbbox("Nothing x Kami")[3] + 40
-
     total_height = header_height + gap
     for _, h in content_boxes:
         total_height += h + gap
@@ -262,7 +248,6 @@ async def generate_image(data: dict, file_path="sim_info.png"):
         padding = 25
         radius = 18
         fill = (181, 101, 29)
-
         max_width = 0
         line_heights = []
         for line in lines:
@@ -270,34 +255,27 @@ async def generate_image(data: dict, file_path="sim_info.png"):
             w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
             max_width = max(max_width, w)
             line_heights.append(h)
-
         total_height = sum(line_heights) + (len(lines) - 1) * 10
         box_width = max_width + 2 * padding
         box_width = min(box_width, width - 50)
-
         box_height = total_height + 2 * padding
-
         x1 = (width - box_width) // 2
         y1 = y
         x2 = x1 + box_width
         y2 = y1 + box_height
-
         draw.rounded_rectangle((x1, y1, x2, y2), radius=radius, fill=fill, outline=(255, 255, 255), width=2)
-
         y_text = y1 + padding
         for line in lines:
             bbox = draw.textbbox((0, 0), line, font=info_font)
             w = bbox[2] - bbox[0]
             draw.text((x1 + (box_width - w) // 2, y_text), line, font=info_font, fill=(255, 255, 255))
             y_text += bbox[3] - bbox[1] + 10
-
         return y2 + 15
 
     def draw_address_box(draw, y, lines):
         padding = 25
         radius = 18
         fill = (101, 101, 181)
-
         max_width = 0
         line_heights = []
         for line in lines:
@@ -305,27 +283,21 @@ async def generate_image(data: dict, file_path="sim_info.png"):
             w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
             max_width = max(max_width, w)
             line_heights.append(h)
-
         total_height = sum(line_heights) + (len(lines) - 1) * 10
         box_width = max_width + 2 * padding
         box_width = min(box_width, width - 50)
-
         box_height = total_height + 2 * padding
-
         x1 = (width - box_width) // 2
         y1 = y
         x2 = x1 + box_width
         y2 = y1 + box_height
-
         draw.rounded_rectangle((x1, y1, x2, y2), radius=radius, fill=fill, outline=(255, 255, 255), width=2)
-
         y_text = y1 + padding
         for line in lines:
             bbox = draw.textbbox((0, 0), line, font=address_font)
             w = bbox[2] - bbox[0]
             draw.text((x1 + (box_width - w) // 2, y_text), line, font=address_font, fill=(255, 255, 255))
             y_text += bbox[3] - bbox[1] + 10
-
         return y2 + 15
 
     y = draw_info_box(draw, y, info_lines)
@@ -337,15 +309,14 @@ async def generate_image(data: dict, file_path="sim_info.png"):
     brand_height = bbox[3] - bbox[1]
     x = (width - brand_width) // 2
     y_brand = height - brand_height - 20
-
     for dx, dy in [(-2, -2), (2, -2), (-2, 2), (2, 2)]:
         draw.text((x + dx, y_brand + dy), brand_text, font=brand_font, fill=(0, 0, 0))
-
     draw.text((x, y_brand), brand_text, font=brand_font, fill=(255, 255, 255))
 
     if os.path.exists(file_path):
         os.remove(file_path)
     image.save(file_path)
+    return file_path
 
 # When user enters phone number
 from telegram.helpers import escape_markdown
